@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<div th:if="${message}">
+    <h2 th:text="${message}"></h2>
+</div>
+<div th:if="${path}">
+    <h2 th:text="${path}"></h2>
+</div>
+</body>
+</html>
