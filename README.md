@@ -13,6 +13,18 @@ cd /usr/local/fastdfs/
 
 # 一、安装核心库
 
+1.安装版本
+
+```
+#官网
+https://github.com/happyfish100
+
+fastdfs-6.06.tar.gz
+libfastcommon-1.0.43.tar.gz
+fastdfs-nginx-module-1.22.tar.gz
+nginx-1.16.1.tar.gz
+```
+
 2.安装fastdfs的核心库,核心库的地址如下
 
 ```http
@@ -29,13 +41,13 @@ wget https://github.com/happyfish100/libfastcommon/archive/V1.0.7.tar.gz
 
 ```shell
 #解压当前压缩包
-tar -zxvf libfastcommon-1.0.7.tar.gz
+tar -zxvf libfastcommon-1.0.43.tar.gz
 ```
 
 进入目录
 
 ```shell
-tar -zxvf libfastcommon-1.0.7.tar.gz
+cd libfastcommon-1.0.43/
 #查看当前目录下有如下命令
 
 
@@ -171,7 +183,7 @@ vim storage.conf
 base_path=/fastdfs/storage/base
 #真正存放文件的目录，storage启动之后会成功256*256个目录用于存储文件
 store_path0=/fastdfs/storage/store
-#配置tracker地址
+#配置tracker地址，如果有多个，在单机环境下我们可以只保留一个
 tracker_server=172.81.205.117:22122
 #保存并退出
 退出之后要去建之前配置的目录
@@ -319,9 +331,9 @@ cd /usr/local/bin/
 ```shell
 cd /usr/local/fastdfs/
 #解压Nginx压缩包
- tar -zxvf fastdfs-nginx-module-1.20.tar.gz
+ tar -zxvf fastdfs-nginx-module-1.22.tar.gz
  #进入src目录修改相关配置
- cd fastdfs-nginx-module-1.20/src
+ cd fastdfs-nginx-module-1.22/src
  
 [root@VM-0-12-centos src]# ll
 总用量 84
@@ -373,7 +385,7 @@ cd /usr/local/fastdfs/nginx-1.16.1/
 --http-fastcgi-temp-path=/var/temp/nginx/fastcgi \
 --http-uwsgi-temp-path=/var/temp/nginx/uwsgi \
 --http-scgi-temp-path=/var/temp/nginx/scgi \
---add-module=/usr/local/fastdfs/fastdfs-nginx-module-1.20/src
+--add-module=/usr/local/fastdfs/fastdfs-nginx-module-1.22/src
 ```
 
 **-add-module必须定义，此配置信息是用于指定安装Nginx时需要加载的模块，如果未能指定，nginx安装过程中就不会加载fastdfs-nginx-module模块，后续功能无法实现。**  后面的路径就是解压fastdfs-nginx-module产生的绝对路径
@@ -383,5 +395,162 @@ cd /usr/local/fastdfs/nginx-1.16.1/
 ```shell
 cd /usr/local/fastdfs/nginx-1.16.1/
 make
+make install
+修改配置文件
+cd /usr/local/fastdfs/fastdfs-nginx-module-1.22/src
+ cp mod_fastdfs.conf /etc/fdfs/
+ 
+ tracker_server=172.16.96.128:22122
+ url_have_group_name = true
+ store_path0=/fastdfs/storage/store
+ 
+ [root@localhost fdfs]# cp /usr/local/fastdfs/fastdfs-6.06/conf/http.conf /etc/fdfs/
+[root@localhost fdfs]# cp /usr/local/fastdfs/fastdfs-6.06/conf/mime.types /etc/fdfs/
+
+创建nginx启动软链接
+ln -s /usr/local/lib64/libfdfsclient.so /usr/lib64/libfdfsclient.so
+
+网络追踪软链接
+ln -s /fastdfs/storage/store/data/ /fastdfs/storage/store/data/M00
+
+修改nginx配置
+cd /usr/local/fastdfs/nginx-1.16.1/conf
+vim nginx.conf
+
+user  root;
+listen       8888;
+端口8888的原因storage.conf里面配置的就是8888端口
 ```
+
+```
+
+user  root;
+worker_processes  1;
+
+#error_log  logs/error.log;
+#error_log  logs/error.log  notice;
+#error_log  logs/error.log  info;
+
+#pid        logs/nginx.pid;
+
+
+events {
+    worker_connections  1024;
+}
+
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+
+    #log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+    #                  '$status $body_bytes_sent "$http_referer" '
+    #                  '"$http_user_agent" "$http_x_forwarded_for"';
+
+    #access_log  logs/access.log  main;
+
+    sendfile        on;
+    #tcp_nopush     on;
+
+    #keepalive_timeout  0;
+    keepalive_timeout  65;
+
+    #gzip  on;
+
+    server {
+        listen       8888;
+        server_name  localhost;
+        location ~/group[0-9]/M00{
+            ngx_fastdfs_module;
+        }
+
+        #charset koi8-r;
+
+        #access_log  logs/host.access.log  main;
+
+        location / {
+            root   html;
+            index  index.html index.htm;
+        }
+
+        #error_page  404              /404.html;
+
+        # redirect server error pages to the static page /50x.html
+        #
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+
+        # proxy the PHP scripts to Apache listening on 127.0.0.1:80
+        #
+        #location ~ \.php$ {
+        #    proxy_pass   http://127.0.0.1;
+        #}
+
+        # pass the PHP scripts to FastCGI server listening on 127.0.0.1:9000
+        #
+        #location ~ \.php$ {
+        #    root           html;
+        #    fastcgi_pass   127.0.0.1:9000;
+        #    fastcgi_index  index.php;
+        #    fastcgi_param  SCRIPT_FILENAME  /scripts$fastcgi_script_name;
+        #    include        fastcgi_params;
+        #}
+
+        # deny access to .htaccess files, if Apache's document root
+        # concurs with nginx's one
+        #
+        #location ~ /\.ht {
+        #    deny  all;
+        #}
+    }
+
+
+    # another virtual host using mix of IP-, name-, and port-based configuration
+    #
+    #server {
+    #    listen       8000;
+    #    listen       somename:8080;
+    #    server_name  somename  alias  another.alias;
+
+    #    location / {
+    #        root   html;
+    #        index  index.html index.htm;
+    #    }
+    #}
+
+
+    # HTTPS server
+    #
+    #server {
+    #    listen       443 ssl;
+    #    server_name  localhost;
+
+    #    ssl_certificate      cert.pem;
+    #    ssl_certificate_key  cert.key;
+
+    #    ssl_session_cache    shared:SSL:1m;
+    #    ssl_session_timeout  5m;
+
+    #    ssl_ciphers  HIGH:!aNULL:!MD5;
+    #    ssl_prefer_server_ciphers  on;
+
+    #    location / {
+    #        root   html;
+    #        index  index.html index.htm;
+    #    }
+    #}
+
+}
+
+```
+
+重启storage
+
+启动nginx
+
+/usr/local/nginx/sbin
+
+
 
